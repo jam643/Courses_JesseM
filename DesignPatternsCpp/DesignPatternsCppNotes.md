@@ -1,10 +1,3 @@
----
-tags: [DesignPatterns]
-title: DesignPatternsCppNotes
-created: '2020-08-23T05:31:28.092Z'
-modified: '2020-08-23T05:35:27.757Z'
----
-
 # Design Patterns In Modern C++
 [Udemy Course Site](https://www.udemy.com/course/patterns-cplusplus/)
 
