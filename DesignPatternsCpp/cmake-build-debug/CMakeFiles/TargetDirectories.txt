@@ -1,0 +1,5 @@
+/home/jessemiller/Courses_JesseM/DesignPatternsCpp/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/jessemiller/Courses_JesseM/DesignPatternsCpp/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/jessemiller/Courses_JesseM/DesignPatternsCpp/cmake-build-debug/Section2_SOLID_Design_Principles/CMakeFiles/rebuild_cache.dir
+/home/jessemiller/Courses_JesseM/DesignPatternsCpp/cmake-build-debug/Section2_SOLID_Design_Principles/CMakeFiles/edit_cache.dir
+/home/jessemiller/Courses_JesseM/DesignPatternsCpp/cmake-build-debug/Section2_SOLID_Design_Principles/CMakeFiles/Creational.Creational.SRP.dir

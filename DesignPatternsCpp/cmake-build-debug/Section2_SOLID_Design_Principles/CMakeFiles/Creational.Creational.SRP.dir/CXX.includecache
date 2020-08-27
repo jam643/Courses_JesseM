@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/jessemiller/Courses_JesseM/DesignPatternsCpp/Section2_SOLID_Design_Principles/Creational.Creational.SRP.cpp
+iostream
+-
+fstream
+-
+string
+-
+vector
+-
+boost/lexical_cast.hpp
+-
+

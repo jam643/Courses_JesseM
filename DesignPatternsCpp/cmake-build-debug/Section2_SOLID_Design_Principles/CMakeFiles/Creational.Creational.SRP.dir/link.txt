@@ -1,0 +1,1 @@
+/usr/bin/c++  -g   CMakeFiles/Creational.Creational.SRP.dir/Creational.Creational.SRP.cpp.o  -o Creational.Creational.SRP 

@@ -1,0 +1,1 @@
+add_executable(Creational.Creational.SRP Creational.Creational.SRP.cpp)
