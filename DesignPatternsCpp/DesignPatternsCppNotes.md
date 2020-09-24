@@ -257,7 +257,37 @@
     * `struct User` contains `static boost::bimap<uint32_t, string> names;` to allow bidirection map association
     * `static key add(string){}` adds string to map if doesn't exist and returns key (idx), called during constructor
     * `get_first_name()` and `get_last_name()` then returns string based on key member vars`names.left.find(last_name)->second`
-    * Thought: in this example `bimap` could be replaced by `vector<string>`
-    * Sidenote: could probably use map and `boost::hash` instead of bimap. Maintains `O(log(n))` `add()` and `O(1)` `get()` times, but removes need to search map by value. 
+    * thought: why use `map.find()`, since that assumes ordered map with O(log(n)). Why not have an unordered bimap with O(1) access?
+    * Thought: could probably use `unordered_map<boost::hash, Object>` instead of bimap (like discussed in Adapter section). Maintains `O(log(n))` `add()` (`or O(1) if unordered`) and `O(1)` `get()` times, but removes need to search map by value. 
 * Boost.Flyweight
     * `boost::flyweight<string> first_name, last_name;` to let boost handle flyweight. Can treat vars like normal string but under the hood, they avoid duplication.
+        * Can access pointer via `&first_name.get()`
+* Text Formatting
+    * A simple idea of using a vect<TextRange> to represent begin and end indices of capitalized letters in a string (rather than use a bool for each char in string which uses unecessary extra memory) 
+    * thought: weird name `get_range()` that actually appends a range and returns a ref so capitalize can be set
+
+## Proxy
+* Overview
+    * A class that acts as an interface to a resource. The resource may be remote, expensive to construct, etc.
+    * Proxy class has similar interface to the resource (so code doesn't need to be modified) but adds some addition functionality
+    * Thought: Composite and Decorators are kinda like Proxy since it shares interface but adds functionality/properties
+* Smart Pointer
+    * Smart ptr is proxy for raw ptr. Shares similar API (e.g. `->` operator, return false if null, etc) but adds functionality like handling destruction
+* Property Proxy (doesn't seem useful)
+    * Rather than getter/setter, may want to access member directly e.g. `obj.strength = 10` but in this case `strength = Property<int>(value)` where template class Property overrides assignement= and conversion() operators. So it acts like int but can do additional actions during these operators.
+    * Thought: Seems not great to expose fields (even if they are Properties) since it couples interface with implementation and removes ability to perform input validation
+    * Sidenote: mentioned metaclass (which is proposed to be added to C++)
+        * Would allow specifying different types of classes (e.g. and Interface) where compiler uses reflection and compile time programming to set methods to pure virtual instead of programmer. e.g.
+        ```c++
+        Interface MyInterface{
+            method1(); // compile-time programmed to be pure virtual during compilation
+            method2();
+        }
+        ```
+* Virtual Proxy
+    * E.g. with `struct Bitmap : Image` that loads bitmap in ctor and then has draw() fn, can create `LazyBitmap : Image` that defers loading to draw()
+    * then `Bitmap* bitmap` is pointer in Lazy proxy to allow delayed construction.
+* Communication Proxy
+    * `LocalPong : Pingable` and `RemotePong : Pingable` share `ping()` API but remote version actual pings website and waits for response (even though it appears in process).
+* Proxy vs Decorator
+    * Proxy tries to provide identical interface rather than enhance interface with fields/features. Decorator also has reference to obj its decorating
