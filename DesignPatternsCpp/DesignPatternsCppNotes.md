@@ -104,3 +104,160 @@
     * `auto jane = clone(*john)` where clone fn serializes and then deserializes
     * Interesting that there's no easier way to deep copy obj with embedded objects. Even serialization requires defining method in each level, but is better than copy constructor because it forces you to make a true deep copy and traverse the entire set of obj rather than accidentally shallow copying some vals.
     
+## Singleton
+* Overview
+    * Least popular of original design patterns (if you need this, there's a design smell)
+    * Only want constructor call once, prevent creating additional copies, avoid thread safety
+    * Singleton is a component instantiated only once
+* Singleton Implementation
+    * delete copy constructor and copy assignment operator `Singleton(Singleton const&) = delete;` and `void operator=(Singleton const&) = delete`
+    * Need `static Singleton& Singleton::get(){static Singleton sg; return sg;}` member function to be able to access class
+    * Access via `Singleton::get().function()`. Note, can't even do `auto sg = Singleton::get()` since that calls assignment operator.
+    * Any subsequent calls to `get()` will return the reference to the existing static instance rather than create a new one.
+    * Con: may not be threadsafe in pre C++11 where you can get multiple instances in separate threads
+* Testing Issues
+    * Unit tests need to use reference to same `Singleton` instance if running together and is therefore constrained
+* Singleton in Dependency Injection
+    * Solution to above testing issue (test)
+    * Make interface for Singleton `SingletonInterface` with the common pure virtual function, and create `DummySingleton` to override
+    * In consuming class to Singleton, pass `SingletonInterface` in constructor (dependency injection) e.g. `Consumer(SingletonInterce &sg)`
+    * Then production code can pass real Singleton and unittest can inject Dummy and test Consumer with Dummy
+* Singleton Lifetime in DI Container
+    * Using boost::di to specify lifetime of class to be singleton, e.g. `auto injector = di::make_injector(di::bind<IFoo>().to<Foo>().in(di::singleton))`, says to bind IFoo (interface) to create Foo derived instance instead and set lifetime to singleton (so creating multiple instances via `injector.create...` will make sure it all refers to same instance of `Foo`)
+    * alternative to defining own singleton via copy constructor/assignment operator and specify it's lifetime directly
+    * Dependency Injection sidenote:
+        * E.g. rather than `Controller` creating `ForcesSolver` instance itself, you pass solver interface into controller constructor (i.e. injecting dependency, `Controller(SolverInterface solver)`) so that you can easily swap for different solvers.
+        * DI containers, struct that maps class `Controller` to logic to create its dependencies if they haven't been created already. E.g. `DICont->get('Controller')` will inject default ForcesSolver. Can update DICont with `AcadoSolver` so it uses that in future.
+* Monostate
+    * member variables are all static, so `Monostate m1;` and `Monostate m2` will share member vars, if you change in one, it will change in the other instance
+    * This is actually bad way to acheive singleton because it is unclear from the consumer what is happening and doesn't work with inheritance
+* Multiton
+    * Useful to limit number of instantiations but can do more than one (vs Singleton is just one)
+    * e.g. `enum class Importance{primary, secondary, tertiary}` to specify allow 3 creations
+    * `typedef Multiton<Object, Importance> mt`, then `auto ob2 = mt::get(Importance::secondary)` where it will return reference to existing object if already created for that enum
+    
+## Adapter
+* Overview
+    * We are moving from Creational to Structural patterns now
+    * Adapts an existing interface X to conform to required interface Y
+* Vector/Raster Demo
+    * E.g. `VectorRectangle` class containing 4 lines with `LineToPointAdapter` struct to convert line to points for visualization
+* Adapter Caching
+    * avoid recomputing adapter output if adapter has already encountered object with same vals using caching
+    * Interesting: hashing can be used for performant comparisons to check the equivalence of objects (using boost hash)
+        * initialize `size_t 0x...` seed and then combine seed with object members (`boost::hash_combine(seed,obj.x)`)to create unique hash to obj contents
+    * Adapter has `static map<size_t, Points> cache`, if `LineToPointCachingAdapter(Line& line)` already has a line with same hash in cache, then it returns that, else it adds to map
+    
+## Discussion
+* cool table showing if user declares e.g. copy constructor, what compiler does with everything else
+    * non declared vs deleted changes whether compiler or linker throws (compiler complains if deleted)
+* Suggest using GMock instead of DummySingleton class for testing Singleton by mocking SingletonInterface
+
+## Bridge
+* Overview
+    * Mechanism that decouples an abstraction/interface (hierarchy) from an implementation (hierarchy)
+    * E.g. if have 2 shape types and 2 Renderer types, can avoid 4 separate class implementations
+* Pimple Idiom
+    * Implementation separated into Imp class and main class has pointer to Impl
+    * Impl inherits from main class
+    * E.g. in `Person.cpp`, have `Person::PersonImpl:greet(){cout<<"bla";)` but fn `Person::greet(){impl->greet();}`
+    * Why have this?: 
+        * Hide implementation from header (e.g. no private members listed in header, can go into Impl class defined in .cpp file)
+        * Compilation speed. If some impl in header, then have to recompile when changes made. Although modern compilers are smart and fast already.
+* Shrink-Wrapped Pimpl
+    * Prepackaged Pimpl approach with templated `Pimpl<implClass>` class that contains impl as unique ptr.
+    * Then in main class use `pimpl<Imp> impl;` in main class instead of `Impl* impl = new Impl()`
+    * Why do we need wrapped Pimple to be able to use smart ptr? Can't we use that in traditional Pimpl approach? Can.
+* Bridge Implementation
+    * E.g. if have 2 shape types (circle, square) and 2 Renderer types (raster, vector), can avoid 4 separate class implementations
+    * Shape template class is provided Renderer template class as dependency injection, `Shape::Shape(Renderer& renderer)`. Then `Circle.render(){renderer.render_circle(x,y,rad);}` doesn't need to know whether it is rendering with raster or vector renderer type.
+    * Note, each renderer class still needs member function to handle each shape rendering (circle, square, etc). But this way, only need one Circle class since DI renderer handles the implementation
+    * BR application: MPCController is passed MPCSolver in constructor like above example
+## Composite
+* Overview:
+    * Allow treat both single (scalar) and composite object uniformly (e.g. Foo and Composite<Foo> share API)
+    * Think: powerpoint can resize individual objects or group them together (composite) and perform same resizing of group (common API)
+    * In general object can use other objects via inheritance/composition
+* Geometric Shapes
+    * GraphicObject interface (`draw()` pure virt fn) with derived class Circle and Group (where group contains `vector<GraphicObjects>`.
+    * Because group inherits from same interface, it shares same API (`draw()`). But it can contain a group of other derived GraphicObjects (e.g. `vector<GraphicObjects> objects=[Circle, Circle, Group[Circle, Square]]`) 
+* Neural Network
+    * Idea is that both Neuron and NeuronLayer (`NeuronLayer : public vector<Neuron>`) should be able to connect_to each other interchangeably (Neuron has `vector<Neuron*> in, out;`).
+    * Use CTRP (curiously recurring template pattern) base class `SomeNeurons<Self>` that defines `connect_to(T& other)` (where T is templated type of Neuron or NeuronLayer that is passed)
+        * Then `Neuron : public SomeNeurons<Neuron>` and `NeuronLayer : public SomeNeurons<NeuronLayer>` and they don't need to override connect_to
+        * Hack to get this to work though, Neuron needs to define begin() and end() to share interface with vector<Neuron> so that it can be called in parent SomeNeurons class interchangeably
+        * Sidenote: CTRP is when `class Derived : public Base<Derived>` so base is templated with derived class. Useful in this case because base class definition`SomeNeurons::connect_to()` can implement function where type is cast as whatever derived class is in for loop: `for (Neuron& from : *static_cast<Self*>(this))`
+* Array-Backed Properties
+    * E.g. if you want to have avg/sum etc of member variables, make member variables an array with enum spcifying the index for each member.
+    * e.g. `enum Abilities { str, agl, intl, count}; array<int, count> abilities;`, now easy to compute avg value of all ability members since it's in an array but also still have a way to access each with name.
+* Overview
+    * 'Duck Typing' allows us to add begin()/end() fns (returns `this` and `this+1;` respectively) to a scalar class so it can behave/masquerade like a collection and can use same code regardless.
+    
+## Discussion
+* Pimpl why not use: more pointer dereferencing and abstraction that is hard for IDE's to resolve. Otherwise it's good for reducing 
+* BR CRTP example: TransitionC1 and TransitionC2 share similar implementations but don't inherit from each other. CRTP could be used to move implementation to base class.
+   
+## Decorator
+* Overview:
+    * Want to augment object with additional functionality but don't want to alter existing code (OCP) and keep new functionality separate (SRP)
+    * Options:
+        * aggregate the decorator object
+        * Inherit from decorated object
+* Dynamic Decorator:
+    * E.g.
+    ```c++
+      // decorator 1
+      struct ColoredShape : Shape
+      {ColoredShape(Shape &shape, const string &color)};
+      // decorator 1
+      struct TransparentShape : Shape{}; ...
+      
+      //usage
+      Square square{5};
+      ColoredShape red_square{square, "red"};
+      TransparentShape tran_square{red_square, 0.5};
+    ```
+    * `ColoredShape` inherits from `Shape` base class but also is passed a shape derived instance at runtime to construct.
+    * Allows e.g. `Circle` and `Square` to not duplicate color functionality and separates to different class.
+    * B/c decorator inherits from baseclass, decorator instances can be fed into other decorators e.g. `TransparentShape`
+    * Downside of dynamic/runtime nature is that ColoredShape obj will not have auto-complete, visible API of e.g. square methods that are not in Shape baseclass.
+* Static Decorator
+    * avoid prev mentioned issue with Dynamic Decorator not having clear API
+    * Using Mixin inheritance, inherit from template `template <T> struct ColoredShape2 : T{static_assert(is_base_of<Shape, T>::value);}`
+    * Can do:
+    ```c++
+      ColoredShape2<Circle> green_circle{"green", 5};
+      green_circle.resize(2); //decorator access member fn of Circle not defined in Shape, not possible with Dynamic Decorator
+      TransparentShape2<ColoredShape2<Square>> square{0.5, "blue", 10};
+    ```
+    * requires variading template to make passing variable args to constructor possible
+    * In this way, c++ during compile time will create structs ColoredShape2 that inherit from Circle, Square, etc based on what's implemented rather than inherit from Shape baseclass as before.
+* Functional Decorator
+    * decorate function rather than class.
+    * E.g. 
+    ```c++
+    template <class Func>
+    Logger::Logger(const Func &func, const string&name)
+    void Logger::operator()() const{cout<<name; func();}
+    ```
+    * wraps provided function so when `logger()` is called it will act like function call.
+    * Modify this implementation to achieve function decorators for generic functions that accept args using variadic template, e.g. `logged_add(2,3)` wraps the function passed to the class during construction 
+    * Note: to avoid having to pass function signature in constructor, need C++ to infer type based on provided value (which it doesn't do). Therefore need to 
+
+## Facade
+* Overview 
+    * Expose several components through single interface
+    * Provides simple easy to understand user interface over a large and sophisticated body of code
+    
+## Flyweight
+* Overview:
+    * Space optimization technique that uses less memory by storing externally the data associate with similar objects
+* Handmade Flyweight
+    * Problem: want `User user1{"John","Doe"}; User user2{"John","Smith"};` To share point to same "John" str rather than duplicate
+    * `struct User` contains `static boost::bimap<uint32_t, string> names;` to allow bidirection map association
+    * `static key add(string){}` adds string to map if doesn't exist and returns key (idx), called during constructor
+    * `get_first_name()` and `get_last_name()` then returns string based on key member vars`names.left.find(last_name)->second`
+    * Thought: in this example `bimap` could be replaced by `vector<string>`
+    * Sidenote: could probably use map and `boost::hash` instead of bimap. Maintains `O(log(n))` `add()` and `O(1)` `get()` times, but removes need to search map by value. 
+* Boost.Flyweight
+    * `boost::flyweight<string> first_name, last_name;` to let boost handle flyweight. Can treat vars like normal string but under the hood, they avoid duplication.
