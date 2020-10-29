@@ -261,7 +261,7 @@
     * Thought: could probably use `unordered_map<boost::hash, Object>` instead of bimap (like discussed in Adapter section). Maintains `O(log(n))` `add()` (`or O(1) if unordered`) and `O(1)` `get()` times, but removes need to search map by value. 
 * Boost.Flyweight
     * `boost::flyweight<string> first_name, last_name;` to let boost handle flyweight. Can treat vars like normal string but under the hood, they avoid duplication.
-        * Can access pointer via `&first_name.get()`
+        * Can access pointer vi a `&first_name.get()`
 * Text Formatting
     * A simple idea of using a vect<TextRange> to represent begin and end indices of capitalized letters in a string (rather than use a bool for each char in string which uses unecessary extra memory) 
     * thought: weird name `get_range()` that actually appends a range and returns a ref so capitalize can be set
@@ -291,3 +291,84 @@
     * `LocalPong : Pingable` and `RemotePong : Pingable` share `ping()` API but remote version actual pings website and waits for response (even though it appears in process).
 * Proxy vs Decorator
     * Proxy tries to provide identical interface rather than enhance interface with fields/features. Decorator also has reference to obj its decorating
+    
+## Chain of Responsibility
+* Overview
+    * chain of components who all get chance to process command or query, optionally having default processing implementation and an ability to terminate the process chain.
+* Pointer Chain
+    * E.g. game with Creature (attack, defence members) and `CreatureModifier` base class
+    * Usage looks like
+    ```c++
+      Creature goblin{ "Goblin", 1, 1 };
+      CreatureModifier root{ goblin };
+      DoubleAttackModifier r1{ goblin };
+      DoubleAttackModifier r1_2{ goblin };
+      IncreaseDefenseModifier r2{ goblin };
+      //NoBonusesModifier nb{ goblin }; // effectively Command objects
+    
+      //root.add(&nb);
+      root.add(&r1);
+      root.add(&r1_2);
+      root.add(&r2);
+    
+      root.handle(); // annoying
+      cout << goblin << endl;
+    ```
+  * Where the `CreatureModifier` base class has member `CreatureModifier* next;` which allows modifiers to be chained via singly linked list, so when handle() is called, all modifiers handles are called
+  * `CreatureModifier::add()` will navigate down existing linked list of ptrs and add pointer to final modifier's `next`. 
+  * `CreatureModifier::handle()` calls the modifier's handle which operates on the Creature member in the base class, and then calls  next->handle() until chain is navigated
+  * thougtht: if want to add noBonus, needs to be added in beginning before chain of handles are called
+  * thought: unlike decorator which inherits from same class as obj it modifies and adds properties, this keeps properties of obj but creates list of operations that are performed on obj existing properties
+  * NOTE: this method is not used much anymore, where a singly linked list is maintained. More common now to 
+* Broker Chain
+    * Rather than modifiers maintaining singly linked list, uses `boost::signals2` to create a subscriber type system
+    * Creature.getAttack() will create a Query with object/attack info that's then handled by GameEngine class that performs operations defined by existing modifier instances
+
+## Command
+* Overview
+    * ordinary C++ statements/fn calls are perishable (no record of what was called or way to undo)
+    * want object which represents instruction to perform particular action and contain all relevant info
+    * e.g. a GUI undo/redo
+    
+## Interpreter
+* Overview
+    * Textual input needed to be processed (e.g. often turned into OOP)
+    * E.g. programming language compilers, HTML, interpreters and IDEs, numeric expressions, regex
+    * Component that processes structured text data. Does so by turning it into separate lexical tokens (lexing) (e.g. split math expr into nums and brakets) and then interpreting sequences of those tokens (parsing)
+* Handmade Interpreter: Lexing:
+    * e.g. with `(13-4)-(12+1)` convert to `vector<Token>` (e.g. '(' '13' '-' '4'...) where Token contains enum of integer, plus, etc.
+    * int processing requires loop to combined sequential ints into single int token (e.g. 13 is one token) 
+* Handmade Interpreter: Parsing:
+    * `parse(vector<TOken>0` function that iterates through tokens and handles subgroup in parenth recursively
+    * `Element` interface scruct with `eval()` method inherited by Integer and BinaryOperation to determine how to eval tokens
+* Building Parsers with Boost.Spirit:
+    * Can create your own programming language
+    * Define abstract syntax tree (e.g. define code block, assignment statement). Define OO structs.
+    * `parser.hpp` add rules. Used by boost.spirit
+    * Double dispatch visitor pattern 
+    * No explicit lexing
+    
+## Iterator
+* Overview
+    * Facilitates traversal of various data structures
+    * Keeps ref to current element and knows how to move to a diff element
+    * Can be used implicitly (e.g. range-based for loop)
+* Iterators in STL
+    * `vector<double>::iterator it = vect.begin()` or `auto it = begin(vect)` both work to get first iterator. Second would also work for array.
+    * Can dereference it via `*it` or call member via `it->` like it were pointer
+    * `++it` increments. `it + 1` does same.
+    * `vect.end()` points to one after last element
+    * To go in reverse `rbegin(vect)` point in last elem and `rend` point to one before first. `++ri` goes back.
+    * const iter, e.g. `vector<string>::const_reverse_iterator it = crbegin(names)`
+    * range base for loop: type needs begin() and end(), automatically dereferences var and assigns to variable. Rec `auto&& val` incase e.g. outdated vect of bool for safety?
+* Binary Tree Iterator
+    * `PreOrderIterator struct` within `BinaryTree struct` with `Node<U>* current;` ptr, with `operator!=`, `operator++` (which traverse tree), `operator*(){return *current}`
+    * `BinaryTree` implements `PreOrderIterator<T> begin()` with traversal logic and `end(){return nullptr;}`. Allows traversal via range based loop
+    * can also expose multiple iterator types within `BinaryTree` to sup
+* Tree Iterator with Coroutines
+    * Using coroutine and generator headers
+    * PostOrder iterator can be define (where entire algo is defined at once which allows recursive soln rather than it++ prev only allowed for iterative soln)
+        * use `co_yield x;` to provide intermediate output for generator so value is provided before recursion finishes. Known as 'suspend execution'
+* Boost Iterator Facade
+    * e.g. `struct ListIterator : boost::iterator_facade<ListIterator, Node, boost::forward_traversal_tag>`. Note CRTP
+    
