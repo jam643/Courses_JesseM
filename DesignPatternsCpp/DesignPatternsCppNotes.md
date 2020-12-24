@@ -347,6 +347,7 @@
     * `parser.hpp` add rules. Used by boost.spirit
     * Double dispatch visitor pattern 
     * No explicit lexing
+    * Bacuks-Naur Form
     
 ## Iterator
 * Overview
@@ -371,4 +372,123 @@
         * use `co_yield x;` to provide intermediate output for generator so value is provided before recursion finishes. Known as 'suspend execution'
 * Boost Iterator Facade
     * e.g. `struct ListIterator : boost::iterator_facade<ListIterator, Node, boost::forward_traversal_tag>`. Note CRTP
+    
+## Mediator
+* Overview
+    * Component that facilitates communication between components that don't have direct access to each other
+    * Each object has reference/ptr to mediator and get it via dependency injection during construction
+    * mediator allows bidirectional communication
+* Chat Room
+    *  `Person` struct has pntr to `ChatRoom` struct. `ChatRoom` struct has `vector<Person*>`
+    * ChatRoom has `broadcast(string origin, string msg)` and `message(string origin, string who, string message)` fns that call the `person->recieve(origin, sg)`
+    * ChatRoom has `join(Person *p)` to add to it's list
+    * Person can send message to another person based on string name `Person::pm(string who, string msg)` and then ChatRoom finds actual other person instance based on string
+    * This means individual people don't need to know who else is in room
+    * Thought: if we have multiple Trajectory Generators to run syncronously and communicate w/ each other (for bookkeeping), may want to use this method as some sort of simple msging system
+* Event Broker
+    * using boost signal2
+    * `Game` mediator contains `boost::signal<void(EventData*)> events;`
+    * `player` has ref to `game` and has `score()` fn that calls `game.events(PlayerScoreData ps(...))`
+    * `coach` has ref go `game` and connects to game via `game.events.connect([](EventData){callback stuff...)`
+    
+## Memento
+* Overview
+    * save snapshot (token representing state) of system at a time and allow user to rollback system to a given snapshot
+    * similar to Command pattern which record every change and then rollback instead of keep snapshot
+* Memento
+    * `BankAccont` class with `int balance`. Separate `Memento` class with `int balance`.
+    * BankAccount has `restore(Memento m)` that sets state back to provided memento
+    * Memento doesn't allow its internal state modified (immutable)
+* Undo and Redo
+    * requires small state since entire state is stored
+    * `BankAccount` has member `vector<shared_ptr<Memento>> changes` and `int current` so it can navigate it's own undo/redo 
+    * `undo()` and `redo()` fns that call `restore(Memento)` fn and increment current. Does nothing if sharedptr is nullptr (at end of vect)
+* Automatic Memento
+    * class (token) that does something in constructor (passed reference to something to modify) and does reverse in destructor
+    
+## Observer
+* Overview
+    * Subscriber listen to 'events' and notified when they occur.
+    * Boost/Qt calls signal/slot (instead of event/subscriber)
+* Observer
+    * `Person` class with `age` member observed by template `Observer` base class with derived `ConsolePersonObserver`
+    * `Observer` class has `field_change()` method. Very simple implementation.
+* Observable (continue example)
+    * `Observable` templated class with `vector<Observer<T>*> observers;` member 
+        * and `notify(T source, string field_name)` method that calls each observer
+        * and `subscribe(Observer)` and `unsubscribe(Observer)` methods that add to vector
+    * `Person : public Observable<Person>` uses CRTP
+        * within setter method, call base class `notify()`
+* Observable with Boost.Signals
+    * `Observable` class now with just member `signal<void(T&, const string&)> field_change;`
+    * `Person` setter now also sets `field_changed(*this, "age");`
+    * No longer need `Observer` class, instead `connect()` to signal and provide lambda fn
+        * `Person p; auto conn = p2.field_changed.connect([](){print stuff...})`
+        * disconnect equivalent to unsubscribe
+        * Observable/Person no longer need any info about what type subscribes/connects
+* The Problem with Dependencies
+    * tricky to scale
+* Thread safety and Reentry
+    * `Observable`'s vector of Observers not thread safe because e.g. can't unsubscribe() during notify()
+    * Boost:signal not thread safe and requires your own implementation
+    * mutex lock within notify, subscribe, and unsubscribe
+    * recursive_mutex?!
+    
+# State
+* Overview
+    * state machine: changes in state can be implicit or in response to event (Observer patter)
+    * objects behavior determined by state.
+    * The thing managing a state is a state machine
+* Classic State Implementation (deprecated)
+    * `State` base class with `OnState` and `OffState` derived and overrides `off(LightSwitch)` and `on(LightSwitch)` methods respectively
+    * `LightSwitch` class with ptr to `State* state;` and `on(){state->on(LightSwitch)}` and `off(){...}`
+    * weird: using `delete this;` within OnState/OffState methods since it sets state member of LightSwitch to it's counterpart ptr and must delete itself
+    * doesn't recommend this due to weirdness of state member changing it's own type, but still found in textbooks
+* Handmade State Machine
+    * better method than prev
+    * enum class `State` with phone states (connecting, connected, on hold, on hook)
+    * enum class `Trigger` events that cause a transition between states. E.g. (dial, hung up, ...)
+    * state machine (rules for what states can transition given what triggers) as `map<State, vector<pair<Trigger, State>> rules;`
+        * e.g. starting state can transition to several end states given certain Trigger
+        * current state var that follows rules given series of triggers
+    * thought: prev impl allowed states to be class and have methods whereas this approach seems like lightweight rules without states having their own methods
+* State Machine with Boost.MSM (meta-state machine)
+    * CRTP `struct PhoneStateMachine : state_machine_def<PhoneStateMachine>`
+    * StateMachine class contains several internal struct defs (e.g. `struct OffHook: State<>{}`) that inherit from base `State` class
+    * triggers are define externally as structs
+    * SM also contains `transition_table` that defines `Row<beginState, Trigger, endState>`
+    * define `no_transition(Event, FSM, state)` which is called if there is no transition, and other options in framework to customize
+    * phone has `process_event(Trigger)` method that given a trigger will change to appropriate state defined in transition table
+    
+    
+## Visitor
+* Overview
+    * Allow define new operation in class hierarchy without having to modify every class in hierarchy (OCP, single responsibility principle)
+    * A component (visitor) is allowed to traverse entire inheritance hierarchy. Impl by propagating a single visit() method throughout entire hierarchy.
+* Intrusive Visitor
+    * `Expression` base class inherited by `DoubleExpression` and `AdditionExpression` classes.
+    * To add new print operation, can add `print()` method to base and derived classes (AKA intrusive visitor that is bad for above reasons)
+* Reflective Visitor
+    * separate print operation to a separate `ExpressionPrinter` struct
+    * first attempt is have `print(DoubleExpression , ostringstream)` and `print(AdditionExpression , ostringstream)`
+        * doesn't work because we can't pass `Expression` type and expect it to be resolved by overload which is determined at compile time
+    * instead, fake 'reflection' (which other languages have) by having single `print(Expression)` method that has `if else` block which attempts to dynamic cast Expression to each derived type and determines implementation based on that.
+    * not nice to have giant if-else and dynamic cast (which adds overhead)
+    * the if-else that determines what impl to call, is called 'dispatching'
+* Classic Visitor (double dispatch)
+    * prev dispatch was done at run-time, no easy way to get it done at compile time (b/c C++ is static OO language). But double dispatch 'tricks' to get disptach at compile time
+    * `ExpressionVisitor` base class with pure virt `visit(Double*)` and `visit(Addition*)` fns. Inherit by `ExpressionPrinter`
+    * `Expression` base has pure virt `accept(ExprVisitor)`. Then each derived e.g. `DoubleExpression` has `accept(ExpressionVisitor* visitor) override {visitor->visit(this)}`
+    * In this case, the determination of which overloaded visit() to call is done at compile time, and is handled by inheritance
+    * Easy to add more visitor classes with additional functionality that is hidden from main class heirarchy
+    * E.g. main: `auto expr = AdditionExpression{...}; ExpressionPrinter visitor; visitor.visit(expr);`
+* Acyclic Visitor
+    * based on RTTI (so slower)
+    * weird inheritance and templating
+* Multimethod
+    * e.g. if function `collide(GameObject& first, GameObject& second){impl depend on combo of types}`
+    * can achieve with `map<pair<type_index, type_index, void(*)(void)>> outcomes` that maps these two types to separately defined functions
+    * type in map determined at runntime within collide via `first.type()` and `second.type()`
+    
+    
     
